@@ -1,5 +1,6 @@
 package com.ecommerce.be.Service;
 
+import com.ecommerce.be.Repository.ProductRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,16 +25,18 @@ import java.util.Map;
 public class OrderService {
 
     private OrderRepository orderRepository;
+    private ProductRepository productRepository;
     private OrderProductService orderProductService;
     private CartService cartService;
     private PaymentUtil paymentUtil;
 
     public OrderService(OrderRepository orderRepository, CartService cartService, PaymentUtil paymentUtil, 
-            OrderProductService orderProductService) {
+            OrderProductService orderProductService, ProductRepository productRepository) {
         this.orderProductService = orderProductService;
         this.cartService = cartService;
         this.orderRepository = orderRepository;
         this.paymentUtil = paymentUtil;
+        this.productRepository = productRepository;
     }
 
     public Order createAndSaveOrder(CreatePaymentRequestDTO createPaymentRequestDTO, String buyer, String seller,
@@ -83,6 +86,13 @@ public class OrderService {
 
             // Save each product in cart into OrderProduct
             products.forEach((product) -> {
+                // Subtract inventory and check results
+                int rowsUpdated = productRepository.decreaseStock(product.getProductId(), product.getQuantity());
+
+                if (rowsUpdated == 0) {
+                    // Through error for Transactional rollback
+                    throw new RuntimeException("Sản phẩm " + product.getName() + " đã hết hàng hoặc không đủ số lượng!");
+                }
                 orderProductService.saveOrderProduct(order, product.getProductId(), product.getQuantity(), buyerUsername,
                         product.getNote());
             });
